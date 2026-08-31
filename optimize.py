@@ -191,7 +191,10 @@ def print_timetable(timetable: dict[str, int]) -> None:
         for day in days:
             filtered = filter(day, tp[0], tp[1])
             lectures = filtered["Course Code"].to_list()
-            formatted = ",".join(lectures)
+            sections = filtered["Section Num"].to_list()
+            halls = filtered["Hall"].to_list()
+
+            formatted = "\n".join(f"{l}({s})@{h}" for l, s, h in zip(lectures, sections, halls))
             row.append(formatted)
 
         table.append(row)
