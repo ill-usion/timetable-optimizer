@@ -2,6 +2,7 @@ import argparse
 import random
 import pandas as pd
 from tabulate import tabulate
+from functools import cache
 
 
 df = pd.read_csv("timetable.csv", index_col=0)
@@ -54,7 +55,7 @@ def find_exam_conflicts(courses: list[str]) -> list[tuple[str, str]]:
 
     return exam_conflicts
     
-
+@cache
 def section_count(course: str) -> int:
     ''' Identifies the number of sections of course '''
     course_timetable = df[df["Course Code"] == course]
@@ -62,6 +63,7 @@ def section_count(course: str) -> int:
     return count
 
 
+@cache
 def count_courses_conflict(course1: str, course1_sec: int, course2: str, course2_sec: int) -> bool:
     ''' Checks whether the two given courses conflict in timing '''
     c1_timetable = df[(df["Course Code"] == course1) & (df["Section Num"] == course1_sec)]
