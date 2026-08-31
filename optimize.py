@@ -64,7 +64,7 @@ def section_count(course: str) -> int:
 
 
 @cache
-def count_courses_conflict(course1: str, course1_sec: int, course2: str, course2_sec: int) -> bool:
+def count_courses_conflict(course1: str, course1_sec: int, course2: str, course2_sec: int) -> int:
     ''' Checks whether the two given courses conflict in timing '''
     c1_timetable = df[(df["Course Code"] == course1) & (df["Section Num"] == course1_sec)]
     c2_timetable = df[(df["Course Code"] == course2) & (df["Section Num"] == course2_sec)]
