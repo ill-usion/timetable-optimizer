@@ -1,6 +1,7 @@
 import argparse
 import random
 import pandas as pd
+from tabulate import tabulate
 
 
 df = pd.read_csv("timetable.csv", index_col=0)
@@ -183,18 +184,20 @@ def print_timetable(timetable: dict[str, int]) -> None:
     time_pairs = tuple(sorted(set(time_pairs), key=sum))
 
     days = ("SUN", "MON", "TUE", "WED", "THU")
-    print("Time / Day |          " + "          |          ".join(days))
-    print("-" * (150 - 18))
+    headers = ("Time / Day",) + days
+    table = []
     for tp in time_pairs:
-        print(f"{fmt_time(tp[0])}-{fmt_time(tp[1])}|", end="")
+        row = [f"{fmt_time(tp[0])}-{fmt_time(tp[1])}"]
         for day in days:
             filtered = filter(day, tp[0], tp[1])
             lectures = filtered["Course Code"].to_list()
-            formatted = ",".join(lectures).center(23)
-            print(formatted + "|", end="")
-        print()
-    print("-" * (150 - 18))
+            formatted = ",".join(lectures)
+            row.append(formatted)
 
+        table.append(row)
+
+    print(tabulate(table, headers=headers, tablefmt="rounded_grid", headersglobalalign="center"))
+        
 
 def main():
     parser = argparse.ArgumentParser(description="Program that finds the most optimal timetable")
@@ -213,7 +216,7 @@ def main():
     exam_conflicts = find_exam_conflicts(courses)
     if len(exam_conflicts):
         print("The following courses contain a final exam conflict:")
-        for c1, c2 in exam_conflicts:python table print
+        for c1, c2 in exam_conflicts:
             print(f"\t- {c1} & {c2}")
 
         exit(1)
