@@ -205,9 +205,9 @@ def print_timetable(timetable: dict[str, int]) -> None:
 def main():
     parser = argparse.ArgumentParser(description="Program that finds the most optimal timetable")
     parser.add_argument("courses", nargs="+", help="Selected courses")
-    parser.add_argument("-tp", "--thu-penalty", default=5, help="Thursday lecture penalty", type=float)
-    parser.add_argument("-mp", "--morning-penalty", default=10, help="Morning lecture penalty (08:00)", type=float)
-    parser.add_argument("-cp", "--conflict-penalty", default=100, help="Lecture conflict penalty", type=float)
+    parser.add_argument("-tp", "--thu-penalty", default=5, help="Thursday lecture penalty", type=int)
+    parser.add_argument("-mp", "--morning-penalty", default=10, help="Morning lecture penalty (08:00)", type=int)
+    parser.add_argument("-cp", "--conflict-penalty", default=100, help="Lecture conflict penalty", type=int)
 
     args = parser.parse_args()
     courses = args.courses
