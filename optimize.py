@@ -119,6 +119,13 @@ def count_thursday_lectures(timetable: dict[str, int]) -> int:
     
     return len(thursday_lecs)
 
+def count_credits_per_day(timetable: dict[str, int]):
+    ''' Groups by day of the week and counts the number of credits per day '''
+    lecs_by_dow = df[(df[["Course Code", "Section Num"]].apply(tuple, axis=1).isin(timetable.items()))] \
+        .groupby("Day")
+
+    return lecs_by_dow.agg({"Credits": "sum"}, axis=0)
+
 
 def rand_timetable(courses: list[str]):
     ''' Picks random sections of the given courses without checking for conflicts '''
@@ -148,18 +155,24 @@ def score(timetable: dict[str, int], penalties: any) -> float:
     CONFLICT_PENALTY = penalties.conflict_penalty
     THURSDAY_PENALTY = penalties.thu_penalty
     MORNING_PENALTY = penalties.morning_penalty
+    HIGH_CREDIT_PENALTY = penalties.high_credit_penalty
+    CREDIT_PER_DAY_LIMIT = penalties.daily_credit_limit
+
     s = 0
     
     conflicts = count_conflicts(timetable)
     morning_lecs = count_morning_lectures(timetable)
     thursday_lecs = count_thursday_lectures(timetable)
+    credits_per_dow = count_credits_per_day(timetable)
+    credit_limited_days = len(credits_per_dow[credits_per_dow["Credits"] > CREDIT_PER_DAY_LIMIT])
 
     s += conflicts * CONFLICT_PENALTY
     s += morning_lecs * MORNING_PENALTY
     s += thursday_lecs * THURSDAY_PENALTY
+    s += credit_limited_days * HIGH_CREDIT_PENALTY
 
     fmt_courses = f"[{', '.join(f'{c}={s:02d}' for c, s in timetable.items())}]"
-    print(fmt_courses, "Score:", s, "Conflicts:", conflicts, "Morning lectures:", morning_lecs, "Thursday lectures:", thursday_lecs)
+    print(fmt_courses, "Score:", s, "Conflicts:", conflicts, "Morning lectures:", morning_lecs, "Thursday lectures:", thursday_lecs, "High credit days:", credit_limited_days)
     return s
 
 
@@ -210,6 +223,8 @@ def main():
     parser.add_argument("-tp", "--thu-penalty", default=5, help="Thursday lecture penalty", type=int)
     parser.add_argument("-mp", "--morning-penalty", default=10, help="Morning lecture penalty (08:00)", type=int)
     parser.add_argument("-cp", "--conflict-penalty", default=100, help="Lecture conflict penalty", type=int)
+    parser.add_argument("-hcp", "--high-credit-penalty", default=20, help="High credit per day penalty", type=int)
+    parser.add_argument("-dcl", "--daily-credit-limit", default=8, help="Maximum number of credits per day", type=int)
 
     args = parser.parse_args()
     courses = args.courses
