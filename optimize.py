@@ -7,6 +7,151 @@ from functools import cache
 
 df = pd.read_csv("timetable.csv", index_col=0)
 
+class TimetableHeuristics:
+    def __init__(self, timetable: pd.DataFrame, course_selection: dict[str, int], args: any):
+        ''' Initializes a heuristics object with the given timetable and course selection '''
+        self.timetable_df = timetable[timetable[["Course Code", "Section Num"]].apply(tuple, axis=1).isin(course_selection.items())] 
+        self.args = args
+        self.val = None
+
+    
+    def count_courses_conflict(self, course1: str, course1_sec: int, course2: str, course2_sec: int) -> int:
+        ''' Checks whether the two given courses conflict in timing '''
+        c1_timetable = self.timetable_df[(self.timetable_df["Course Code"] == course1) & (self.timetable_df["Section Num"] == course1_sec)]
+        c2_timetable = self.timetable_df[(self.timetable_df["Course Code"] == course2) & (self.timetable_df["Section Num"] == course2_sec)]
+        count = 0
+
+        # TODO: vectorize
+        for i1, row1 in c1_timetable.iterrows():
+            for i2, row2 in c2_timetable.iterrows():
+                if (row1["Day"] == row2["Day"]) and \
+                    (
+                        (row1["From Time"] == row2["From Time"] and row1["To Time"] == row2["To Time"]) or \
+                        (row1["From Time"] >= row2["From Time"] and row1["From Time"] <= row2["To Time"]) or \
+                        (row1["To Time"] >= row2["From Time"] and row1["To Time"] <= row2["To Time"]) \
+                    ):
+                    count += 1
+
+        return count
+    
+    def count_conflicts(self) -> int:
+        ''' Counts the number of course conflicts per two lectures in the given timetable '''
+        conflicts = 0
+        
+        tt = self.timetable_df[["Course Code", "Section Num"]].drop_duplicates()
+        for i, r1 in tt.iterrows():
+            for _, r2 in tt.loc[i + 1:].iterrows():
+                conflicts += self.count_courses_conflict(
+                    r1["Course Code"], r1["Section Num"],
+                    r2["Course Code"], r2["Section Num"])
+
+        return conflicts
+
+    def count_morning_lectures(self, morning_time: int = 480) -> int:
+        ''' Counts the number of morning lectures in the given timetable ''' 
+        morning_lecs = self.timetable_df[self.timetable_df["From Time"] <= morning_time]
+
+        return len(morning_lecs)
+
+
+    def count_consecutive_lectures(self, time_gap: int = 10) -> int:
+        pass
+
+
+    def count_thursday_lectures(self) -> int:
+        ''' Counts the number of lectures that occur on Thursday '''
+        thursday_lecs = self.timetable_df[self.timetable_df["Day"] == "THU"]
+        
+        return len(thursday_lecs)
+
+    def count_credits_per_day(self):
+        ''' Groups by day of the week and counts the number of credits per day '''
+        lecs_by_dow = self.timetable_df.groupby("Day")
+
+        return lecs_by_dow.agg({"Credits": "sum"}, axis=0)
+
+
+    # TODO: Heuristics options object
+    def score(self) -> float:
+        ''' Scores a timetable based on conflict and timing criteria '''
+        if self.val is not None:
+            return self.val
+
+        CONFLICT_PENALTY = self.args.conflict_penalty
+        THURSDAY_PENALTY = self.args.thu_penalty
+        MORNING_PENALTY = self.args.morning_penalty
+        HIGH_CREDIT_PENALTY = self.args.high_credit_penalty
+        CREDIT_PER_DAY_LIMIT = self.args.daily_credit_limit
+
+        s = 0
+        
+        conflicts = self.count_conflicts()
+        morning_lecs = self.count_morning_lectures()
+        thursday_lecs = self.count_thursday_lectures()
+        credits_per_dow = self.count_credits_per_day()
+        credit_limited_days = len(credits_per_dow[credits_per_dow["Credits"] > CREDIT_PER_DAY_LIMIT])
+
+        s += conflicts * CONFLICT_PENALTY
+        s += morning_lecs * MORNING_PENALTY
+        s += thursday_lecs * THURSDAY_PENALTY
+        s += credit_limited_days * HIGH_CREDIT_PENALTY
+
+        course_sec_pair = self.timetable_df[["Course Code", "Section Num"]].drop_duplicates()
+        fmt_courses = f"[{', '.join(f'{c}={s:02d}' for c, s in course_sec_pair.itertuples(index=False))}]"
+        print(fmt_courses, "Score:", s, "Conflicts:", conflicts, "Morning lectures:", morning_lecs, "Thursday lectures:", thursday_lecs, "High credit days:", credit_limited_days)
+
+        self.val = s
+        return s
+
+
+    def __eq__(self, other: any):
+        if isinstance(other, int):
+            return self.score() == other
+
+        if isinstance(other, TimetableHeuristics):
+            return self.score() == other.score()
+
+        raise ValueError("Invalid `other` type")
+
+    def __lt__(self, other: any):
+        if isinstance(other, int):
+            return self.score() < other
+
+        if isinstance(other, TimetableHeuristics):
+            return self.score() < other.score()
+
+        raise ValueError("Invalid `other` type")
+
+    def __gt__(self, other: any):
+        if isinstance(other, int):
+            return self.score() > other
+
+        if isinstance(other, TimetableHeuristics):
+            return self.score() > other.score()
+
+        raise ValueError("Invalid `other` type")
+
+    def __le__(self, other: any):
+        if isinstance(other, int):
+            return self.score() <= other
+
+        if isinstance(other, TimetableHeuristics):
+            return self.score() <= other.score()
+
+        raise ValueError("Invalid `other` type")
+
+    def __ge__(self, other: any):
+        if isinstance(other, int):
+            return self.score() >= other
+
+        if isinstance(other, TimetableHeuristics):
+            return self.score() >= other.score()
+
+        raise ValueError("Invalid `other` type")
+
+    def __repr__(self):
+        return str(self.score())
+
 
 def are_valid_courses(courses: list[str]) -> bool:
     ''' Validates if the given courses exist in the timetable '''
@@ -63,65 +208,6 @@ def section_count(course: str) -> int:
     return count
 
 
-@cache
-def count_courses_conflict(course1: str, course1_sec: int, course2: str, course2_sec: int) -> int:
-    ''' Checks whether the two given courses conflict in timing '''
-    c1_timetable = df[(df["Course Code"] == course1) & (df["Section Num"] == course1_sec)]
-    c2_timetable = df[(df["Course Code"] == course2) & (df["Section Num"] == course2_sec)]
-    count = 0
-
-    # TODO: vectorize
-    for i1, row1 in c1_timetable.iterrows():
-        for i2, row2 in c2_timetable.iterrows():
-            if (row1["Day"] == row2["Day"]) and \
-                (
-                    (row1["From Time"] == row2["From Time"] and row1["To Time"] == row2["To Time"]) or \
-                    (row1["From Time"] >= row2["From Time"] and row1["From Time"] <= row2["To Time"]) or \
-                    (row1["To Time"] >= row2["From Time"] and row1["To Time"] <= row2["To Time"]) \
-                ):
-                count += 1
-
-    return count
-
-
-def count_conflicts(timetable_df: pd.DataFrame) -> int:
-    ''' Counts the number of course conflicts per two lectures in the given timetable '''
-    conflicts = 0
-    
-    tt = timetable_df[["Course Code", "Section Num"]].drop_duplicates()
-    for i, r1 in tt.iterrows():
-        for _, r2 in tt.loc[i + 1:].iterrows():
-            conflicts += count_courses_conflict(
-                r1["Course Code"], r1["Section Num"],
-                r2["Course Code"], r2["Section Num"])
-
-    return conflicts
-
-
-def count_morning_lectures(timetable_df: pd.DataFrame, morning_time: int = 480) -> int:
-    ''' Counts the number of morning lectures in the given timetable ''' 
-    morning_lecs = timetable_df[timetable_df["From Time"] <= morning_time]
-
-    return len(morning_lecs)
-
-
-def count_consecutive_lectures(timetable: dict[str, int], time_gap: int = 10) -> int:
-    pass
-
-
-def count_thursday_lectures(timetable_df: pd.DataFrame) -> int:
-    ''' Counts the number of lectures that occur on Thursday '''
-    thursday_lecs = timetable_df[timetable_df["Day"] == "THU"]
-    
-    return len(thursday_lecs)
-
-def count_credits_per_day(timetable_df: pd.DataFrame):
-    ''' Groups by day of the week and counts the number of credits per day '''
-    lecs_by_dow = timetable_df.groupby("Day")
-
-    return lecs_by_dow.agg({"Credits": "sum"}, axis=0)
-
-
 def rand_timetable(courses: list[str]):
     ''' Picks random sections of the given courses without checking for conflicts '''
     table = dict()
@@ -144,33 +230,6 @@ def neighbors(timetable: dict[str, int]):
             clone[course] = i
             yield clone
 
-
-def score(timetable: dict[str, int], penalties: any) -> float:
-    ''' Scores a timetable based on conflict and timing criteria '''
-    timetable_df = df[(df[["Course Code", "Section Num"]].apply(tuple, axis=1).isin(timetable.items()))] 
-
-    CONFLICT_PENALTY = penalties.conflict_penalty
-    THURSDAY_PENALTY = penalties.thu_penalty
-    MORNING_PENALTY = penalties.morning_penalty
-    HIGH_CREDIT_PENALTY = penalties.high_credit_penalty
-    CREDIT_PER_DAY_LIMIT = penalties.daily_credit_limit
-
-    s = 0
-    
-    conflicts = count_conflicts(timetable_df)
-    morning_lecs = count_morning_lectures(timetable_df)
-    thursday_lecs = count_thursday_lectures(timetable_df)
-    credits_per_dow = count_credits_per_day(timetable_df)
-    credit_limited_days = len(credits_per_dow[credits_per_dow["Credits"] > CREDIT_PER_DAY_LIMIT])
-
-    s += conflicts * CONFLICT_PENALTY
-    s += morning_lecs * MORNING_PENALTY
-    s += thursday_lecs * THURSDAY_PENALTY
-    s += credit_limited_days * HIGH_CREDIT_PENALTY
-
-    fmt_courses = f"[{', '.join(f'{c}={s:02d}' for c, s in timetable.items())}]"
-    print(fmt_courses, "Score:", s, "Conflicts:", conflicts, "Morning lectures:", morning_lecs, "Thursday lectures:", thursday_lecs, "High credit days:", credit_limited_days)
-    return s
 
 
 def print_timetable(timetable: dict[str, int]) -> None:
@@ -240,9 +299,10 @@ def main():
 
     random.shuffle(courses)
     table = rand_timetable(courses)
+    h = TimetableHeuristics(df, table, args)
 
     STEPS = 50
-    best = (score(table, args), table)
+    best = (h, table)
     
     print(f"INITIAL RANDOM TABLE (Score={best[0]}):")
     print_timetable(table)
@@ -250,7 +310,7 @@ def main():
     for _ in range(STEPS):
         cur_best = None
         for neighbor in neighbors(table):
-            new_h = score(neighbor, args)
+            new_h = TimetableHeuristics(df, neighbor, args)
             if (cur_best is not None and cur_best[0] > new_h) or (new_h < best[0]):
                 cur_best = (new_h, neighbor)
                 if new_h == 0:
@@ -258,6 +318,7 @@ def main():
         
         if cur_best is None:
             table = rand_timetable(courses)
+            h = TimetableHeuristics(df, table, args)
             continue
         
         best = cur_best
@@ -265,7 +326,6 @@ def main():
             break
 
     print()
-    score(best[1], args)
     print(f"AFTER OPTIMIZATION(Score={best[0]}):")
     print_timetable(best[1])
 
