@@ -84,26 +84,23 @@ def count_courses_conflict(course1: str, course1_sec: int, course2: str, course2
     return count
 
 
-def count_conflicts(timetable: dict[str, int]) -> int:
+def count_conflicts(timetable_df: pd.DataFrame) -> int:
     ''' Counts the number of course conflicts per two lectures in the given timetable '''
-    unpacked = list(timetable.items())
-    n = len(unpacked)
     conflicts = 0
-
-    # TODO: rewrite
-    for i in range(n):
-        for j in range(i + 1, n):
-            c1, s1 = unpacked[i]
-            c2, s2 = unpacked[j]
-            conflicts += count_courses_conflict(c1, s1, c2, s2)
+    
+    tt = timetable_df[["Course Code", "Section Num"]].drop_duplicates()
+    for i, r1 in tt.iterrows():
+        for _, r2 in tt.loc[i + 1:].iterrows():
+            conflicts += count_courses_conflict(
+                r1["Course Code"], r1["Section Num"],
+                r2["Course Code"], r2["Section Num"])
 
     return conflicts
 
 
-def count_morning_lectures(timetable: dict[str, int], morning_time: int = 480) -> int:
+def count_morning_lectures(timetable_df: pd.DataFrame, morning_time: int = 480) -> int:
     ''' Counts the number of morning lectures in the given timetable ''' 
-    morning_lecs = df[(df[["Course Code", "Section Num"]].apply(tuple, axis=1).isin(timetable.items())) & \
-                      (df["From Time"] <= morning_time)]
+    morning_lecs = timetable_df[timetable_df["From Time"] <= morning_time]
 
     return len(morning_lecs)
 
@@ -112,17 +109,15 @@ def count_consecutive_lectures(timetable: dict[str, int], time_gap: int = 10) ->
     pass
 
 
-def count_thursday_lectures(timetable: dict[str, int]) -> int:
+def count_thursday_lectures(timetable_df: pd.DataFrame) -> int:
     ''' Counts the number of lectures that occur on Thursday '''
-    thursday_lecs = df[(df[["Course Code", "Section Num"]].apply(tuple, axis=1).isin(timetable.items())) & \
-                      (df["Day"] == "THU")]
+    thursday_lecs = timetable_df[timetable_df["Day"] == "THU"]
     
     return len(thursday_lecs)
 
-def count_credits_per_day(timetable: dict[str, int]):
+def count_credits_per_day(timetable_df: pd.DataFrame):
     ''' Groups by day of the week and counts the number of credits per day '''
-    lecs_by_dow = df[(df[["Course Code", "Section Num"]].apply(tuple, axis=1).isin(timetable.items()))] \
-        .groupby("Day")
+    lecs_by_dow = timetable_df.groupby("Day")
 
     return lecs_by_dow.agg({"Credits": "sum"}, axis=0)
 
@@ -152,6 +147,8 @@ def neighbors(timetable: dict[str, int]):
 
 def score(timetable: dict[str, int], penalties: any) -> float:
     ''' Scores a timetable based on conflict and timing criteria '''
+    timetable_df = df[(df[["Course Code", "Section Num"]].apply(tuple, axis=1).isin(timetable.items()))] 
+
     CONFLICT_PENALTY = penalties.conflict_penalty
     THURSDAY_PENALTY = penalties.thu_penalty
     MORNING_PENALTY = penalties.morning_penalty
@@ -160,10 +157,10 @@ def score(timetable: dict[str, int], penalties: any) -> float:
 
     s = 0
     
-    conflicts = count_conflicts(timetable)
-    morning_lecs = count_morning_lectures(timetable)
-    thursday_lecs = count_thursday_lectures(timetable)
-    credits_per_dow = count_credits_per_day(timetable)
+    conflicts = count_conflicts(timetable_df)
+    morning_lecs = count_morning_lectures(timetable_df)
+    thursday_lecs = count_thursday_lectures(timetable_df)
+    credits_per_dow = count_credits_per_day(timetable_df)
     credit_limited_days = len(credits_per_dow[credits_per_dow["Credits"] > CREDIT_PER_DAY_LIMIT])
 
     s += conflicts * CONFLICT_PENALTY
