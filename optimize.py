@@ -31,14 +31,10 @@ def print_timetable(timetable: dict[str, int]) -> None:
                 (all_lecs["To Time"] == to_time)]
 
 
-    time_pairs = tuple()
-    # TODO: vectorize?
-    for course, section in timetable.items():
-        course_timetable = all_lecs[(all_lecs["Course Code"] == course) & (all_lecs["Section Num"] == section)]
-        from_times = course_timetable["From Time"].to_list()    
-        to_times = course_timetable["To Time"].to_list()    
-        time_pairs += tuple(zip(from_times, to_times))
-    time_pairs = tuple(sorted(set(time_pairs), key=sum))
+    from_times = all_lecs["From Time"].to_list()
+    to_times = all_lecs["To Time"].to_list()
+    time_pairs = tuple(zip(from_times, to_times)) # construct time pairs: ((from, to), (from, to)...)
+    time_pairs = tuple(sorted(set(time_pairs), key=sum)) # sort and remove duplicates
 
     days = ("SUN", "MON", "TUE", "WED", "THU")
     headers = ("Time / Day",) + days
