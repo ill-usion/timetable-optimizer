@@ -1,90 +1,21 @@
 import argparse
 import random
 import pandas as pd
+from dataclasses import fields
 from tabulate import tabulate
-from functools import cache
-from heuristics import TimetableHeuristics
+from timetable import Timetable
+from heuristics import TimetableHeuristics, HeuristicsOptions
+from shc_optimizer import SHCOptimizer
 
 
 df = pd.read_csv("timetable.csv", index_col=0)
 
-def are_valid_courses(courses: list[str]) -> bool:
-    ''' Validates if the given courses exist in the timetable '''
-    return pd.Series(courses).isin(df["Course Code"]).all()
 
-
-def find_exam_conflicts(courses: list[str]) -> list[tuple[str, str]]:
-    ''' Finds final exam conflicts by date and time '''
-    def parse_date(row):
-        epoch, duration = row["Exam Date/Time"].split("+")
-        epoch = int(epoch)
-        duration = int(duration) // 60
-
-        dt = pd.to_datetime(epoch, unit="s") + pd.Timedelta("4h") # TODO: find better fix
-        row["Date"] = dt.date()
-        row["From"] = dt.time()
-        row["To"] = (dt + pd.Timedelta(duration, "m")).time()
-        # h, m = divmod(duration, 60)
-        # row["Duration"] = f"{h:02d}:{m:02d}"
-
-        return row
-
-    def conflicts(from1, to1, from2, to2) -> bool:
-        latest_start = max(from1, from2)
-        earliest_end = min(to1, to2)
-
-        return latest_start <= earliest_end
-
-    target_courses = df[df["Course Code"].isin(courses)]
-    exam_times = target_courses[["Course Code", "Exam Date/Time"]].dropna().drop_duplicates()
-    exam_times = exam_times.apply(parse_date, axis=1)
-
-    gb_date = exam_times.groupby("Date")
-    # print(gb_date.apply(lambda x: x[:]))
-
-    # TODO: vectorize
-    exam_conflicts = []
-    for date, exams in gb_date:
-        if len(exams) < 2:
-            continue
-
-        for i, e1 in exams.iterrows():
-            for _, e2 in exams.loc[i + 1:].iterrows():
-                if conflicts(e1["From"], e1["To"], e2["From"], e2["To"]):
-                    exam_conflicts.append((e1["Course Code"], e2["Course Code"]))
-
-    return exam_conflicts
-    
-@cache
-def section_count(course: str) -> int:
-    ''' Identifies the number of sections of course '''
-    course_timetable = df[df["Course Code"] == course]
-    count = course_timetable["Section Num"].max()
-    return count
-
-
-def rand_timetable(courses: list[str]):
-    ''' Picks random sections of the given courses without checking for conflicts '''
-    table = dict()
-    for course in courses:
-        count = section_count(course)
-        rand_sec = random.randint(1, count)
-        table[course] = rand_sec
-
-    return table
-
-
-def neighbors(timetable: dict[str, int]):
-    ''' Generates neighboring timetables to the given one '''
-    for course, section in timetable.items():
-        for i in range(1, section_count(course) + 1):
-            if section == i:
-                continue
-           
-            clone = timetable.copy()
-            clone[course] = i
-            yield clone
-
+def parse_h_opts(args: any) -> HeuristicsOptions:
+    args_dict = vars(args)
+    h_keys = {f.name for f in fields(HeuristicsOptions)}
+    h_dict = {k: v for k, v in args_dict.items() if k in h_keys}
+    return HeuristicsOptions(**h_dict)
 
 
 def print_timetable(timetable: dict[str, int]) -> None:
@@ -131,6 +62,7 @@ def print_timetable(timetable: dict[str, int]) -> None:
 def main():
     parser = argparse.ArgumentParser(description="Program that finds the most optimal timetable")
     parser.add_argument("courses", nargs="+", help="Selected courses")
+    parser.add_argument("-s", "--steps", default=10, help="Number of optimization steps", type=int)
     parser.add_argument("-tp", "--thu-penalty", default=5, help="Thursday lecture penalty", type=int)
     parser.add_argument("-mp", "--morning-penalty", default=10, help="Morning lecture penalty (08:00)", type=int)
     parser.add_argument("-cp", "--conflict-penalty", default=100, help="Lecture conflict penalty", type=int)
@@ -138,13 +70,16 @@ def main():
     parser.add_argument("-dcl", "--daily-credit-limit", default=8, help="Maximum number of credits per day", type=int)
 
     args = parser.parse_args()
-    courses = args.courses
+    h_options = parse_h_opts(args) 
 
-    if not are_valid_courses(courses):
+    courses = args.courses
+    master_table = Timetable(df)
+
+    if not master_table.are_valid_courses(courses):
         print("Found invalid course code.")
         exit(1)
 
-    exam_conflicts = find_exam_conflicts(courses)
+    exam_conflicts = master_table.find_exam_conflicts(courses)
     if len(exam_conflicts):
         print("The following courses contain a final exam conflict:")
         for c1, c2 in exam_conflicts:
@@ -153,37 +88,15 @@ def main():
         exit(1)
 
     random.shuffle(courses)
-    table = rand_timetable(courses)
-    h = TimetableHeuristics(df, table, args)
+    optimizer = SHCOptimizer(master_table, courses, args.steps, h_options)
 
-    STEPS = 50
-    best = (h, table)
-    
-    print(f"INITIAL RANDOM TABLE (Score={best[0]}):")
-    print_timetable(table)
+    print(f"Initial table (score={optimizer.best[0]}):")
+    print_timetable(optimizer.best[1])
+    while optimizer.can_step():
+        optimizer.step()
 
-    for _ in range(STEPS):
-        cur_best = None
-        for neighbor in neighbors(table):
-            new_h = TimetableHeuristics(df, neighbor, args)
-            if (cur_best is not None and cur_best[0] > new_h) or (new_h < best[0]):
-                cur_best = (new_h, neighbor)
-                if new_h == 0:
-                    break
-        
-        if cur_best is None:
-            table = rand_timetable(courses)
-            h = TimetableHeuristics(df, table, args)
-            continue
-        
-        best = cur_best
-        if best[0] == 0:
-            break
-
-    print()
-    print(f"AFTER OPTIMIZATION(Score={best[0]}):")
-    print_timetable(best[1])
-
+    print(f"Table after optimization (score={optimizer.best[0]}):")
+    print_timetable(optimizer.best[1])
 
 if __name__ == "__main__":
     main()

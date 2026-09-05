@@ -1,9 +1,20 @@
 import pandas as pd 
+from dataclasses import dataclass
+
+
+@dataclass
+class HeuristicsOptions:
+    thu_penalty: int
+    morning_penalty: int
+    conflict_penalty: int
+    high_credit_penalty: int
+    daily_credit_limit: int
+
 
 class TimetableHeuristics:
-    def __init__(self, timetable: pd.DataFrame, course_selection: dict[str, int], args: any):
+    def __init__(self, timetable: pd.DataFrame, args: HeurisitcsOptions):
         ''' Initializes a heuristics object with the given timetable and course selection '''
-        self.timetable_df = timetable[timetable[["Course Code", "Section Num"]].apply(tuple, axis=1).isin(course_selection.items())] 
+        self.timetable_df = timetable
         self.args = args
         self.val = None
 
