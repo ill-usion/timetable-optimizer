@@ -13,5 +13,5 @@ class HeuristicOptimizer(ABC):
         pass
 
     def can_step(self) -> bool:
-        return (not self.reached_optimum) or (self.current_step < self.max_steps) 
+        return (not self.reached_optimum) and (self.current_step < self.max_steps) 
 

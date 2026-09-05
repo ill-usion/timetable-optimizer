@@ -93,6 +93,7 @@ def main():
     print(f"Initial table (score={optimizer.best[0]}):")
     print_timetable(optimizer.best[1])
     while optimizer.can_step():
+        print("Step:", optimizer.current_step + 1)
         optimizer.step()
 
     print(f"Table after optimization (score={optimizer.best[0]}):")
