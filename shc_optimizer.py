@@ -25,6 +25,7 @@ class SHCOptimizer(HeuristicOptimizer):
             if neighbor_h < self.best[0]:
                 current_best = (neighbor_h, neighbor)
                 self.best = current_best
+                self.reached_optimum = current_best[0] == 0
                 return 
 
         if current_best is None:
