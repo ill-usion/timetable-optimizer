@@ -11,6 +11,9 @@ class HeuristicsOptions:
     daily_credit_limit: int
     consec_lecture_penalty: int
 
+    def __repr__(self):
+        return f"Penalties: {{ Thursday: {self.thu_penalty}, Morning: {self.morning_penalty}, Conflict: {self.conflict_penalty}, High credit: {self.high_credit_penalty}, Consecutive: {self.consec_lecture_penalty} }}, Options: {{ Daily credit limit: {self.daily_credit_limit} }}"
+
 
 class TimetableHeuristics:
     def __init__(self, timetable: pd.DataFrame, args: HeurisitcsOptions):

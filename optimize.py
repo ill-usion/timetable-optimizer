@@ -95,6 +95,7 @@ def main():
 
     print(f"Table after optimization (score={optimizer.best[0]}):")
     print_timetable(optimizer.best[1])
+    print(h_options)
 
 if __name__ == "__main__":
     main()
