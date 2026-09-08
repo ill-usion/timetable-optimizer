@@ -64,6 +64,7 @@ def main():
     parser.add_argument("-cp", "--conflict-penalty", default=100, help="Lecture conflict penalty", type=int)
     parser.add_argument("-hcp", "--high-credit-penalty", default=20, help="High credit per day penalty", type=int)
     parser.add_argument("-dcl", "--daily-credit-limit", default=8, help="Maximum number of credits per day", type=int)
+    parser.add_argument("-clp", "--consec-lecture-penalty", default=15, help="Consecutive lectures penalty", type=int)
 
     args = parser.parse_args()
     h_options = parse_h_opts(args) 

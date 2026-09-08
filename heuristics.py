@@ -9,6 +9,7 @@ class HeuristicsOptions:
     conflict_penalty: int
     high_credit_penalty: int
     daily_credit_limit: int
+    consec_lecture_penalty: int
 
 
 class TimetableHeuristics:
@@ -58,8 +59,25 @@ class TimetableHeuristics:
         return len(morning_lecs)
 
 
+    # TODO: vectorize
     def count_consecutive_lectures(self, time_gap: int = 10) -> int:
-        pass
+        ''' Counts consecutive lectures '''
+        gb_day = self.timetable_df.groupby("Day")
+        consec_lecs = 0
+        for day, lecs in gb_day:
+            if len(lecs) < 2:
+                continue 
+
+            try:
+                lec_iter = lecs.iterrows()
+                for _, lec in lec_iter:
+                    _, next_lec = next(lec_iter)
+                    if next_lec["From Time"] - lec["To Time"] <= time_gap:
+                        consec_lecs += 1
+            except StopIteration:
+                pass
+
+        return consec_lecs
 
 
     def count_thursday_lectures(self) -> int:
@@ -75,7 +93,6 @@ class TimetableHeuristics:
         return lecs_by_dow.agg({"Credits": "sum"}, axis=0)
 
 
-    # TODO: Heuristics options object
     def score(self) -> float:
         ''' Scores a timetable based on conflict and timing criteria '''
         if self.val is not None:
@@ -86,6 +103,7 @@ class TimetableHeuristics:
         MORNING_PENALTY = self.args.morning_penalty
         HIGH_CREDIT_PENALTY = self.args.high_credit_penalty
         CREDIT_PER_DAY_LIMIT = self.args.daily_credit_limit
+        CONSEC_LECTURE_PENALTY = self.args.consec_lecture_penalty
 
         s = 0
         
@@ -94,15 +112,17 @@ class TimetableHeuristics:
         thursday_lecs = self.count_thursday_lectures()
         credits_per_dow = self.count_credits_per_day()
         credit_limited_days = len(credits_per_dow[credits_per_dow["Credits"] > CREDIT_PER_DAY_LIMIT])
+        consecutive_lecs = self.count_consecutive_lectures()
 
         s += conflicts * CONFLICT_PENALTY
         s += morning_lecs * MORNING_PENALTY
         s += thursday_lecs * THURSDAY_PENALTY
         s += credit_limited_days * HIGH_CREDIT_PENALTY
+        s += consecutive_lecs * CONSEC_LECTURE_PENALTY
 
         course_sec_pair = self.timetable_df[["Course Code", "Section Num"]].drop_duplicates()
         fmt_courses = f"[{', '.join(f'{c}={s:02d}' for c, s in course_sec_pair.itertuples(index=False))}]"
-        print(fmt_courses, "Score:", s, "Conflicts:", conflicts, "Morning lectures:", morning_lecs, "Thursday lectures:", thursday_lecs, "High credit days:", credit_limited_days)
+        print(fmt_courses, "Score:", s, "Conflicts:", conflicts, "Morning lectures:", morning_lecs, "Thursday lectures:", thursday_lecs, "High credit days:", credit_limited_days, "Consecutive lectures:", consecutive_lecs)
 
         self.val = s
         return s
