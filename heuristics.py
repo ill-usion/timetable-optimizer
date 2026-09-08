@@ -72,7 +72,7 @@ class TimetableHeuristics:
                 continue 
 
             try:
-                lec_iter = lecs.iterrows()
+                lec_iter = lecs.sort_values(by="From Time").iterrows()
                 for _, lec in lec_iter:
                     _, next_lec = next(lec_iter)
                     if next_lec["From Time"] - lec["To Time"] <= time_gap:
